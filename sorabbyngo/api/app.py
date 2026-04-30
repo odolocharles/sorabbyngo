@@ -11,6 +11,7 @@ from sorabbyngo.storage.store import Store
 from sorabbyngo.auth.keys import ApiKeyStore, require_scope
 from sorabbyngo.core.rate_limiter import RateLimiter, register_rate_limiter
 from sorabbyngo.core.metrics import SoraMetrics
+from sorabbyngo.core.streaming import StreamBroker, register_stream
 
 def create_app(dry_run=False, testing=False, require_auth=True):
     app = Flask(f"{__name__}.{uuid.uuid4().hex[:8]}")
@@ -25,6 +26,8 @@ def create_app(dry_run=False, testing=False, require_auth=True):
     key_store.seed_default()
     rate_limiter = RateLimiter()
     metrics = SoraMetrics()
+    broker = StreamBroker()
+    register_stream(app, broker)
     _triage_results = {}
 
     if not testing:
@@ -86,6 +89,7 @@ def create_app(dry_run=False, testing=False, require_auth=True):
         if event is None:
             return jsonify({"duplicate":True,"message":"Event deduplicated"}), 200
         store.save_event(event)
+        broker.broadcast_event(event)
         return jsonify(event.model_dump(mode="json")), 201
 
     @app.get("/api/v1/events")
