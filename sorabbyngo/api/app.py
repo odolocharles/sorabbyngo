@@ -12,6 +12,7 @@ from sorabbyngo.auth.keys import ApiKeyStore, require_scope
 from sorabbyngo.core.rate_limiter import RateLimiter, register_rate_limiter
 from sorabbyngo.core.metrics import SoraMetrics
 from sorabbyngo.core.streaming import StreamBroker, register_stream
+from sorabbyngo.plugins import PluginRegistry
 
 def create_app(dry_run=False, testing=False, require_auth=True):
     app = Flask(f"{__name__}.{uuid.uuid4().hex[:8]}")
@@ -27,6 +28,7 @@ def create_app(dry_run=False, testing=False, require_auth=True):
     rate_limiter = RateLimiter()
     metrics = SoraMetrics()
     broker = StreamBroker()
+    plugin_registry = PluginRegistry()
     register_stream(app, broker)
     _triage_results = {}
 
@@ -240,6 +242,30 @@ td{{padding:10px 14px;border-top:1px solid #30363d;font-size:.875rem}}tr:hover t
 <footer>Sorabbyngo v0.13.0 · <a href="/health" style="color:#58a6ff">/health</a> · <a href="/metrics" style="color:#58a6ff">/metrics</a></footer>
 </body></html>"""
         return html, 200, {"Content-Type": "text/html"}
+
+
+    @app.get("/api/v1/plugins")
+    @_auth("admin")
+    def list_plugins():
+        return jsonify(plugin_registry.stats()), 200
+
+    @app.post("/api/v1/plugins/<name>/enable")
+    @_auth("admin")
+    def enable_plugin(name):
+        if not plugin_registry.enable(name): return _err(f"Plugin '{name}' not found", 404)
+        return jsonify({"enabled": True, "name": name}), 200
+
+    @app.post("/api/v1/plugins/<name>/disable")
+    @_auth("admin")
+    def disable_plugin(name):
+        if not plugin_registry.disable(name): return _err(f"Plugin '{name}' not found", 404)
+        return jsonify({"enabled": False, "name": name}), 200
+
+    @app.delete("/api/v1/plugins/<name>")
+    @_auth("admin")
+    def unregister_plugin(name):
+        if not plugin_registry.unregister(name): return _err(f"Plugin '{name}' not found", 404)
+        return jsonify({"unregistered": True, "name": name}), 200
 
     @app.errorhandler(404)
     def not_found(e): return jsonify({"error":"Route not found"}), 404
